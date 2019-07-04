@@ -21,7 +21,7 @@ def load(dir='dataset', labelFormat="oneHot"):
 
         sparseLabel = int(file.split('_')[0])
         if labelFormat == 'oneHot':
-            hotVec = np.zeros(9)
+            hotVec = np.zeros(6)
             hotVec[sparseLabel-1] = 1
             y.append(hotVec)
         else:
