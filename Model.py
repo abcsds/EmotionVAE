@@ -119,9 +119,9 @@ class BetaVAE:
             # dim = x.get_shape().as_list() # https://datascience.stackexchange.com/questions/30810/gan-with-conv2d-using-tensorflow-shape-error
             # x = tf.reshape(x, shape = [-1, *dim[1:]])
             self.model = tf.reshape(x, [-1, self.img_side, self.img_side, 1])
-            self.model = tf.layers.Conv2D(filters=6 , kernel_size=3, strides=(3, 3), activation=tf.nn.relu)(self.model)
-            self.model = tf.layers.Conv2D(filters=12, kernel_size=3, strides=(3, 3), activation=tf.nn.relu)(self.model)
-            self.model = tf.layers.Conv2D(filters=24, kernel_size=3, strides=(3, 3), activation=tf.nn.relu)(self.model)
+            self.model = tf.layers.Conv2D(filters=6 , kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(self.model)
+            self.model = tf.layers.Conv2D(filters=12, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(self.model)
+            self.model = tf.layers.Conv2D(filters=24, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(self.model)
             self.model = tf.layers.Flatten()(self.model)
             self.mu = tf.layers.Dense(self.n_z)(self.model)
             self.log_sigma_sq = tf.layers.Dense(self.n_z)(self.model)
@@ -134,9 +134,9 @@ class BetaVAE:
         with tf.variable_scope("Decoder", reuse=tf.AUTO_REUSE):
             self.model = tf.layers.Dense(7 * 7 * 32)(x)
             self.model = tf.reshape(self.model, [-1, 7, 7, 32])
-            self.model = tf.layers.Conv2DTranspose(filters=24, kernel_size=3, strides=(3, 3), padding="same", activation=tf.nn.relu)(self.model)
-            self.model = tf.layers.Conv2DTranspose(filters=12, kernel_size=3, strides=(3, 3), padding="same", activation=tf.nn.relu)(self.model)
-            self.model = tf.layers.Conv2DTranspose(filters=6 , kernel_size=3, strides=(3, 3), padding="same", activation=tf.nn.relu)(self.model)
+            self.model = tf.layers.Conv2DTranspose(filters=24, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(self.model)
+            self.model = tf.layers.Conv2DTranspose(filters=12, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(self.model)
+            self.model = tf.layers.Conv2DTranspose(filters=6 , kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(self.model)
             self.model = tf.layers.Flatten()(self.model)
             self.model = tf.layers.Dense(self.img_size,
                                          activation=tf.nn.sigmoid)(self.model)
