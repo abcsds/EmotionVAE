@@ -23,11 +23,13 @@ if os.path.exists(outDir):
     shutil.rmtree(outDir)
     os.mkdir(outDir)
 
+maxEmo = -1
 
 for actor in os.listdir(ckDir):
     actorDir = os.path.join(ckDir, actor)
 
     for emotion in os.listdir(actorDir):
+        maxEmo = max(maxEmo, int(emotion))
         if int(emotion) <= 6:
             imgDir = os.path.join(actorDir, emotion)
 
@@ -55,3 +57,5 @@ for actor in os.listdir(ckDir):
 
                 cropped = cv2.resize(cropped, (TARGET_DIM, TARGET_DIM))
                 cv2.imwrite(os.path.join(outDir, outFile), cropped)
+
+print(maxEmo)
