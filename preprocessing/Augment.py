@@ -9,6 +9,7 @@ import numpy as np
 import preprocessing.CvUtil as CvUtil
 
 srcDir = os.path.realpath('../..') + '/CK/cropped/'
+srcNeutralDir = os.path.realpath('../..') + '/CK/neutral/'
 outDir = os.path.realpath('../..') + '/CK/augmented/'
 
 # clean output folder
@@ -24,9 +25,10 @@ for l in range(1, 7):
     minLabelCount = min(minLabelCount, len(images))
     filesByLabel[l] = images
 
-destinationCount = minLabelCount * 3
+destinationCount = 210
 print('destinationCount', destinationCount)
 
+# augment emotion images
 for label, files in filesByLabel.items():
     print('label', label, '# src images', len(files), '# generated images', destinationCount - len(files))
     # augment images
@@ -39,4 +41,14 @@ for label, files in filesByLabel.items():
         fileName, extension = file.split('.')
         newFileName = fileName+"_"+str(i)+'_'+transCode+'.'+extension
         cv2.imwrite(os.path.join(outDir, newFileName), img)
-        
+
+# copy original faces
+for file in allFiles:
+    shutil.copyfile(os.path.join(srcDir, file),
+                    os.path.join(outDir, file))
+
+allFiles = os.listdir(srcNeutralDir)
+np.random.shuffle(allFiles)
+for file in allFiles[:destinationCount]:
+    shutil.copyfile(os.path.join(srcNeutralDir, file),
+                    os.path.join(outDir, file))

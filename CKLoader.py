@@ -8,26 +8,19 @@ def load(dir='dataset', labelFormat="oneHot"):
     :param labelFormat: oneHot or sparse
     :return: x, y as numpy arrays
     '''
-    x = list()
-    y = list()
+    pass
 
-    for file in os.listdir(dir):
-        img = cv2.imread(os.path.join(dir, file))
 
-        # remove the 3rd image dimension as all 3 just have the grey value
-        img = img[:,:,0].reshape(img.shape[0], img.shape[0])
+def unzip():
+    assert os.path.exists("augmented.zip") and os.path.exists("dataset")
+    if len(os.listdir("dataset")) > 0:
+        print('dataset folder is not empty... Not unpacking dataset')
+        return
 
-        x.append(img)
-
-        sparseLabel = int(file.split('_')[0])
-        if labelFormat == 'oneHot':
-            hotVec = np.zeros(6)
-            hotVec[sparseLabel-1] = 1
-            y.append(hotVec)
-        else:
-            y.append(sparseLabel)
-
-    return np.array(x), np.array(y)
+    import zipfile
+    zip_ref = zipfile.ZipFile("augmented.zip", 'r')
+    zip_ref.extractall("dataset/")
+    zip_ref.close()
 
 #x,y = load()
 #print(x.shape, y.shape)
