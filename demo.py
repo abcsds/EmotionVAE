@@ -7,5 +7,5 @@ CKLoader.unzip()
 
 model = BetaVAE()
 
-with tf.Session() as sess:
-    model.fit(sess, "./ck")
+#with tf.Session() as sess:
+#    model.fit(sess, "./ck")

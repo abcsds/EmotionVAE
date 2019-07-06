@@ -1,6 +1,4 @@
-import numpy as np
 import os
-import cv2
 
 def load(dir='dataset', labelFormat="oneHot"):
     '''
@@ -8,18 +6,25 @@ def load(dir='dataset', labelFormat="oneHot"):
     :param labelFormat: oneHot or sparse
     :return: x, y as numpy arrays
     '''
-    pass
+    raise NotImplementedError("This function is not used at the moment")
 
 
 def unzip():
-    assert os.path.exists("augmented.zip") and os.path.exists("dataset")
-    if len(os.listdir("dataset")) > 0:
+    zipFile = "preprocessing/augmented.zip"
+    outDir = "dataset"
+
+    assert os.path.exists(zipFile)
+
+    if not os.path.exists(outDir):
+        os.mkdir(outDir)
+
+    if len(os.listdir(outDir)) > 0:
         print('dataset folder is not empty... Not unpacking dataset')
         return
 
     import zipfile
-    zip_ref = zipfile.ZipFile("augmented.zip", 'r')
-    zip_ref.extractall("dataset/")
+    zip_ref = zipfile.ZipFile(zipFile, 'r')
+    zip_ref.extractall(outDir)
     zip_ref.close()
 
 #x,y = load()

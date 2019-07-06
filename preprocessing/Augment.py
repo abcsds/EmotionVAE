@@ -52,3 +52,11 @@ np.random.shuffle(allFiles)
 for file in allFiles[:destinationCount]:
     shutil.copyfile(os.path.join(srcNeutralDir, file),
                     os.path.join(outDir, file))
+
+zipFileName = 'augmented.zip'
+if os.path.exists(zipFileName):
+    os.remove(zipFileName)
+import zipfile
+with zipfile.ZipFile(zipFileName, 'w', zipfile.ZIP_DEFLATED) as zipf:
+    for file in os.listdir(outDir):
+        zipf.write(os.path.join(outDir, file), arcname=file)

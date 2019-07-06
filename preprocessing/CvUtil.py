@@ -32,13 +32,26 @@ def linearTrans(img):
     return cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
 
 
+def rotate(img):
+    rotationScale = 10
+    rotation = np.random.randint(-rotationScale, rotationScale)
+    rows, cols = img.shape[:2]
+    M = cv2.getRotationMatrix2D((cols / 2, rows / 2), rotation, 1)
+    return cv2.warpAffine(img, M, (cols, rows))
+
+
 augmentationOptions = [
-    flipLeftRight,
     distort3D,
-    linearTrans
+    linearTrans,
+    rotate
 ]
 
 def randomAugmentation(img):
     global augmentationOptions
     i = np.random.randint(len(augmentationOptions))
+
+    # randomly flip the image before augmentation
+    if np.random.randint(2) == 1:
+        img = flipLeftRight(img)
+
     return augmentationOptions[i](img), augmentationOptions[i].__name__
