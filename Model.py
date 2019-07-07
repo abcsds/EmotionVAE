@@ -4,6 +4,7 @@ import pathlib
 import random
 import numpy as np
 from time import time
+import matplotlib.pyplot as plt
 
 
 # think about
@@ -18,7 +19,7 @@ class BetaVAE:
                  batch_size=16,
                  epochs=10,
                  n_z=10,
-                 beta=100,
+                 beta=10,
                  lr=1e-3,
                  format="jpg",
                  extra_repeats=2,
@@ -83,13 +84,14 @@ class BetaVAE:
         opt = tf.train.AdamOptimizer(learning_rate=self.lr)
         self.opt = opt.minimize(self.loss)
 
-    def fit(self, sess):
+    def fit(self, sess, viz=False):
         print("Begin Session: Processing {:d} images in {:d} batches".format(
               self.batch_size * self.n_batches * self.epochs, self.n_batches))
         # Session
         sess.run(tf.global_variables_initializer())
         sess.run(self.iterator.initializer)
         self.err = False
+        zs       = []
         for epoch in range(self.epochs):
             tic = time()
             try:
@@ -104,12 +106,18 @@ class BetaVAE:
                         self.err = True
                         break
                     self.plottableLoss.append(tloss)
+                    if epoch == self.epochs-1:
+                        lat = sess.run(self.z, feed_dict={self.input: X})
+                        zs.append(lat)
                 if self.err:
                     break
                 print("\nLoss= {:>8.4f} Time: {:>8.4f}".format(tloss,
                                                                time() - tic))
             except tf.errors.OutOfRangeError:
                 pass
+            if viz:
+                self.plot_iteration(sess, X)
+        self._lat_reps = np.vstack(zs)
 
     def predict(self, sess, x):
         return sess.run(self.model, feed_dict={self.input: x})
@@ -175,3 +183,26 @@ class BetaVAE:
     def load_and_preprocess_image(self, path):
         image = tf.read_file(path)
         return self.preprocess_image(image)
+
+    def plot_iteration(self, sess, X, n_subplots=5, figsize=(10, 4)):
+        # Generate images from noise
+        f, a = plt.subplots(2, n_subplots, figsize=figsize)
+        for i in range(n_subplots):
+            inn = X
+            inn = np.reshape(inn, newshape=(-1, self.img_side, self.img_side, 1))
+            inn = np.reshape(np.repeat(inn[i][:, :, np.newaxis], 3, axis=2),
+                             newshape=(self.img_side, self.img_side, 3))
+            a[0][i].imshow(inn)
+            a[0][i].axis("off")
+            out = sess.run(self.model, feed_dict={self.input:X})
+            out = np.reshape(out, newshape=(-1, self.img_side, self.img_side, 1))
+            out = np.reshape(np.repeat(out[i][:, :, np.newaxis], 3, axis=2),
+                             newshape=(self.img_side, self.img_side, 3))
+            a[1][i].imshow(out)
+            a[1][i].axis("off")
+
+        f.show()
+        plt.show()
+
+    def latent_std(self):
+        return np.std(self._lat_reps, axis=0)
