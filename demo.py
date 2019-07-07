@@ -3,7 +3,7 @@ import tensorflow as tf
 import CKLoader as CKLoader
 
 # call this function once to unzip the dataset
-CKLoader.unzip()
+x,y = CKLoader.load()
 
 model = BetaVAE()
 
