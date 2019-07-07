@@ -1,7 +1,6 @@
 import tensorflow as tf
 # from BatchIterator import BatchIterator # Batch iterator is tensorflow-based
 import pathlib
-import random
 import numpy as np
 from time import time
 import matplotlib.pyplot as plt
@@ -19,7 +18,7 @@ class BetaVAE:
                  batch_size=16,
                  epochs=10,
                  n_z=10,
-                 beta=10,
+                 beta=4,
                  lr=1e-3,
                  format="jpg",
                  extra_repeats=2,
@@ -96,7 +95,7 @@ class BetaVAE:
             tic = time()
             try:
                 print("Epoch {:>2}:  ".format(epoch), end="")
-                for i in range(self.n_batches - 2):
+                for i in range(self.n_batches):
                     print(".", end="")
                     X = self.get_next(sess)
                     tloss, _ = sess.run([self.loss, self.opt],
@@ -127,7 +126,7 @@ class BetaVAE:
         path_ds = tf.data.Dataset.from_tensor_slices(self.all_image_paths)
         ds = path_ds.map(self.load_and_preprocess_image,
                          num_parallel_calls=self.AUTOTUNE)
-        ds = ds.shuffle(buffer_size=self.batch_size * 2)
+        # ds = ds.shuffle(buffer_size=self.batch_size * 2)
         ds = ds.repeat(self.data_repeats)
         ds = ds.prefetch(buffer_size=self.AUTOTUNE)
         ds = ds.batch(self.batch_size)
@@ -135,18 +134,21 @@ class BetaVAE:
         return self.iterator.get_next()
 
     def get_next(self, sess):
-        return sess.run(tf.layers.Flatten()(self.next_element))
+        return sess.run(tf.keras.layers.Flatten()(self.next_element))
 
     def encode(self, x):
         with tf.variable_scope("Encoder", reuse=tf.AUTO_REUSE):
             model = tf.reshape(x, [-1, self.img_side, self.img_side, self.n_channels])
-            model = tf.layers.Conv2D(filters=6 , kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(model)
-            model = tf.layers.Conv2D(filters=12, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(model)
-            model = tf.layers.Conv2D(filters=18, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(model)
-
-            model = tf.layers.Flatten()(model)
-            self.mu = tf.layers.Dense(self.n_z)(model)
-            self.log_sigma_sq = tf.layers.Dense(self.n_z)(model)
+            model = tf.keras.layers.Conv2D(filters=64, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
+            model = tf.keras.layers.Conv2D(filters=128, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
+            model = tf.keras.layers.Conv2D(filters=256, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
+            self._int_shape = tf.keras.backend.int_shape(model)
+            model = tf.keras.layers.Flatten()(model)
+            self.mu = tf.keras.layers.Dense(self.n_z)(model)
+            self.log_sigma_sq = tf.keras.layers.Dense(self.n_z)(model)
             self.eps = tf.random_normal(shape=tf.shape(self.log_sigma_sq),
                                         mean=0, stddev=1, dtype=tf.float32)
             self.z = self.mu + tf.sqrt(tf.exp(self.log_sigma_sq)) * self.eps
@@ -154,20 +156,24 @@ class BetaVAE:
 
     def decode(self, x):
         with tf.variable_scope("decoder", reuse=tf.AUTO_REUSE):
-            model = tf.layers.Dense(7*7*32)(x)
-            model = tf.reshape(model, [-1, 7, 7, 32])
-            model = tf.layers.Conv2DTranspose(filters=18, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(model)
-            model = tf.layers.Conv2DTranspose(filters=12, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(model)
-            model = tf.layers.Conv2DTranspose(filters=6, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(model)
-            model = tf.layers.Flatten()(model)
-            model = tf.layers.Dense(self.img_size, activation=tf.nn.sigmoid)(model)
+            model = tf.keras.layers.Dense(self._int_shape[1] * self._int_shape[2] * self._int_shape[3], activation="relu")(x)
+            model = tf.reshape(model, [-1, self._int_shape[1], self._int_shape[2], self._int_shape[3]])
+            model = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.UpSampling2D((2, 2))(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.UpSampling2D((2, 2))(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.UpSampling2D((2, 2))(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=1, kernel_size=1, activation="sigmoid", padding="same")(model)
+            model = tf.keras.layers.Flatten()(model)
         return model
 
     def load_data(self, path, format="jpg", extra_repeats=2):
         data_root = pathlib.Path(path)
         all_image_paths = list(data_root.glob("*." + format))
+        # all_image_labels = [label_to_index[pathlib.Path(path).parent.name]
+        #             for path in all_image_paths]
         self.all_image_paths = [str(path) for path in all_image_paths]
-        random.shuffle(self.all_image_paths)
         self.image_count = len(self.all_image_paths)
         self.data_repeats = self.epochs * extra_repeats
         self.n_batches = self.image_count // self.batch_size
