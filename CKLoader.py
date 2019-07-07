@@ -1,4 +1,6 @@
 import os
+import cv2
+import numpy as np
 
 def load(dir='dataset', labelFormat="oneHot"):
     '''
@@ -6,7 +8,22 @@ def load(dir='dataset', labelFormat="oneHot"):
     :param labelFormat: oneHot or sparse
     :return: x, y as numpy arrays
     '''
-    raise NotImplementedError("This function is not used at the moment")
+    unzip()
+
+    x = list()
+    y = list()
+
+    for imgFile in os.listdir(dir):
+        cvImg = cv2.imread(os.path.join(dir, imgFile))
+        x.append(cvImg[:,:,0])
+
+        labelVec = np.zeros(6)
+        label = int(imgFile.split('_')[0])
+        labelVec[label-1] = 1
+        y.append(labelVec)
+
+    return np.array(x), np.array(y)
+    #raise NotImplementedError("This function is not used at the moment")
 
 
 def unzip():
