@@ -142,7 +142,7 @@ class BetaVAE:
                                          activation=tf.nn.sigmoid)(self.model)
             # return self.model
 
-    def load_data(self, path, format="png"):
+    def load_data(self, path, format="jpg"):
         self.data_root = pathlib.Path(path)
         self.all_image_paths = list(self.data_root.glob("*." + format))
         self.all_image_paths = [str(path) for path in self.all_image_paths]
@@ -153,10 +153,10 @@ class BetaVAE:
 
     def preprocess_image(self, image):
         image = tf.image.decode_jpeg(image, channels=1)
-        image = tf.image.resize_images(image, [self.img_side, self.img_side])
-    #     image = tf.image.per_image_standardization(image)
-    #     image = image + tf.reduce_min(image)
-        image /= tf.reduce_max(image)
+        # image = tf.image.resize_images(image, [self.img_side, self.img_side])
+        # image = tf.image.per_image_standardization(image)
+        # image = image + tf.reduce_min(image)
+        # image /= tf.reduce_max(image)
         return image
 
     def load_and_preprocess_image(self, path):
