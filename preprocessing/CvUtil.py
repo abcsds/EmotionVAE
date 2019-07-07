@@ -10,7 +10,7 @@ def distort3D(img):
     # persepective transformation
     # https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_geometric_transformations/py_geometric_transformations.html
 
-    distortScale = 20
+    distortScale = 8
     distorts = np.random.randint(-distortScale, distortScale, (4, 2))
 
     ymax, xmax = img.shape[:2]
@@ -28,12 +28,12 @@ def distort3D(img):
 
 def linearTrans(img):
     alpha = np.random.rand() * 1.5 + 1
-    beta = np.random.randint(100)
+    beta = np.random.randint(10, 90)
     return cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
 
 
 def rotate(img):
-    rotationScale = 10
+    rotationScale = 5
     rotation = np.random.randint(-rotationScale, rotationScale)
     rows, cols = img.shape[:2]
     M = cv2.getRotationMatrix2D((cols / 2, rows / 2), rotation, 1)
