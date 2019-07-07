@@ -17,9 +17,9 @@ def load(dir='dataset', labelFormat="oneHot"):
         cvImg = cv2.imread(os.path.join(dir, imgFile))
         x.append(cvImg[:,:,0])
 
-        labelVec = np.zeros(6)
+        labelVec = np.zeros(7)
         label = int(imgFile.split('_')[0])
-        labelVec[label-1] = 1
+        labelVec[label] = 1
         y.append(labelVec)
 
     return np.array(x), np.array(y)
