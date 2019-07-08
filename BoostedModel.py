@@ -5,6 +5,7 @@ import random
 import numpy as np
 from time import time
 import os
+from BatchIterator import BatchIterator
 
 # think about
 # session management (session should come from colab)
@@ -13,7 +14,7 @@ import os
 class BoostedBetaVAE:
     AUTOTUNE = tf.data.experimental.AUTOTUNE
     def __init__(self,
-                 path="./dataset",
+                 path="./ck",
                  img_side=128,
                  batch_size=16,
                  epochs=10,
@@ -23,7 +24,8 @@ class BoostedBetaVAE:
                  format="jpg",
                  extra_repeats=2,
                  n_channels=1,
-                 epsilon=1e-10):
+                 epsilon=1e-10,
+                 share_weights=True):
         self.img_side   = img_side
         self.img_size   = self.img_side**2
         self.batch_size = batch_size
@@ -56,7 +58,7 @@ class BoostedBetaVAE:
         self.model = self.decode(self.z)
 
         # siamese network
-        self.compScore = self.siamese(self.input)
+        self.compScore = self.siamese(self.input, share_weights)
 
         self.sample = self.decode(self.latent)
 
@@ -90,13 +92,29 @@ class BoostedBetaVAE:
 
         # Optimizer Siamese
         siaVarList = [x for x in tf.global_variables() if x.name.startswith('siamese_')]
-        opt = tf.train.AdamOptimizer(learning_rate=self.lr)
+        opt = tf.train.AdamOptimizer(learning_rate=5e-5)
         self.siaOpt = opt.minimize(self.siameseLoss, var_list=siaVarList)
 
         # Optimizer VAE
         vaeVarList = [x for x in tf.global_variables() if x.name.startswith('vae_')]
         opt = tf.train.AdamOptimizer(learning_rate=self.lr)
         self.vaeOpt = opt.minimize(self.loss, var_list=vaeVarList)
+
+
+    def prefit(self, sess, x, y, batchSize=16):
+        batches = BatchIterator(x, y, batchSize)
+        # train the siamese network
+        for epoch in range(30):
+            print("Epoch {:>2}:  ".format(epoch), end="")
+            for mbX, mbY in batches:
+                print(".", end="")
+                tloss, _ = sess.run([self.siameseLoss, self.siaOpt],
+                                    feed_dict={
+                                        self.input: mbX[:, 0, :, :].reshape(batchSize, -1),
+                                        self.siameseInput: mbX[:, 1, :, :].reshape(batchSize, -1),
+                                        self.siameseLabel: mbY.reshape(batchSize, -1)})
+            print("\nLoss= {:>8.4f}".format(tloss))
+
 
     def fit(self, sess):
         print("Begin Session: Processing {:d} images in {:d} batches".format(
@@ -105,16 +123,6 @@ class BoostedBetaVAE:
         sess.run(tf.global_variables_initializer())
         sess.run(self.iterator.initializer)
         self.err = False
-
-        # train the siamese network
-        for epoch in range(100):
-            print("Epoch {:>2}:  ".format(epoch), end="")
-            for i in range(self.n_batches - 2):
-                print(".", end="")
-                X, Y = self.get_next(sess)
-                tloss, _ = sess.run([self.siameseLoss, self.siaOpt],
-                                    feed_dict={self.input: X, self.siameseLabel: Y})
-            print("\nLoss= {:>8.4f} Time: {:>8.4f}".format(tloss))
 
         # train the VAE
         for epoch in range(self.epochs):
@@ -141,31 +149,18 @@ class BoostedBetaVAE:
     def predict(self, sess, x):
         return sess.run(self.model, feed_dict={self.input: x})
 
-    def create_iterator(self):
-        # Create Tensorflow Iterator
-        label_ds = tf.data.Dataset.from_tensor_slices(self.all_labels)
-        path_ds = tf.data.Dataset.from_tensor_slices(self.all_image_paths)
-        full_ds = tf.data.Dataset.zip((path_ds, label_ds))
 
-        ds = full_ds.map(self.load_and_preprocess_image, num_parallel_calls=self.AUTOTUNE)
-        ds = ds.shuffle(buffer_size=self.batch_size * 2)
-        ds = ds.repeat(self.data_repeats)
-        ds = ds.prefetch(buffer_size=self.AUTOTUNE)
-        ds = ds.batch(self.batch_size)
-        self.iterator = ds.make_initializable_iterator()
-        return self.iterator.get_next()
-
-    def get_next(self, sess):
-        return sess.run(tf.layers.Flatten()(self.next_element))
-
-
-    def siamese(self, input):
+    def siamese(self, input, share_weights=False):
         self.siameseInput = tf.placeholder_with_default(input, input.shape, name='siameseInput')
 
         convA = self.featExtractorLayer(input, "siamese_A")
-        convB = self.featExtractorLayer(self.siameseInput, 'siamese_B')
+        if share_weights:
+            bScope = "siamese_A"
+        else:
+            bScope = "siamese_B"
+        convB = self.featExtractorLayer(self.siameseInput, bScope)
 
-        latentRepr = tf.concat([convA, convB], axis=0)
+        latentRepr = tf.concat([convA, convB], axis=1)
         return tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(latentRepr)
 
 
@@ -203,16 +198,33 @@ class BoostedBetaVAE:
             model = tf.layers.Conv2DTranspose(filters=18, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(model)
             model = tf.layers.Conv2DTranspose(filters=12, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(model)
             model = tf.layers.Conv2DTranspose(filters=6, kernel_size=3, strides=(2, 2), padding="same", activation=tf.nn.relu)(model)
-            model = tf.layers.Flatten()(model)
-            model = tf.layers.Dense(self.img_size, activation=tf.nn.sigmoid)(model)
+            model = tf.layers.Conv2D(filters=1, kernel_size=1, strides=(1, 1), padding="same", activation=tf.nn.relu)(model)
+            #model = tf.layers.Flatten()(model)
+            #model = tf.layers.Dense(self.img_size, activation=tf.nn.sigmoid)(model)
         return model
+
+
+    def get_next(self, sess):
+        x, y = self.next_element
+        return sess.run(tf.layers.Flatten()(x)), sess.run(tf.cast(y, tf.float32)).reshape(-1, 1)
+
+
+    def create_iterator(self):
+        # Create Tensorflow Iterator
+        path_ds = tf.data.Dataset.from_tensor_slices(self.all_image_paths)
+        ds = path_ds.map(self.load_and_preprocess_image, num_parallel_calls=self.AUTOTUNE)
+        ds = ds.repeat(self.data_repeats)
+        ds = ds.prefetch(buffer_size=self.AUTOTUNE)
+        ds = ds.batch(self.batch_size)
+        self.iterator = ds.make_initializable_iterator()
+        return self.iterator.get_next()
+
 
     def load_data(self, path, format="jpg", extra_repeats=2):
         data_root = pathlib.Path(path)
         all_image_paths = list(data_root.glob("*." + format))
         self.all_image_paths = [str(path) for path in all_image_paths]
-        self.all_labels = [str(l)[len(str(data_root))+1:].split('_')[0] for l in all_image_paths]
-        #random.shuffle(self.all_image_paths)
+        #self.all_labels = [int(str(l)[len(str(data_root))+1:].split('_')[0]) for l in all_image_paths]
         self.image_count = len(self.all_image_paths)
         self.data_repeats = self.epochs * extra_repeats
         self.n_batches = self.image_count // self.batch_size
@@ -225,6 +237,6 @@ class BoostedBetaVAE:
         image /= tf.reduce_max(image)
         return image
 
-    def load_and_preprocess_image(self, path, label):
+    def load_and_preprocess_image(self, path):
         image = tf.read_file(path)
-        return self.preprocess_image(image), label
+        return self.preprocess_image(image)
