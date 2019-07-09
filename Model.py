@@ -92,13 +92,14 @@ class BetaVAE:
         sess.run(self.iterator.initializer)
         self.err = False
         zs       = []
+        ys       = []
         for epoch in range(self.epochs):
             tic = time()
             try:
                 print("Epoch {:>2}:  ".format(epoch), end="")
                 for i in range(self.n_batches):
                     print(".", end="")
-                    X = self.get_next(sess)
+                    X, y = self.get_next(sess)
                     tloss, _ = sess.run([self.loss, self.opt],
                                         feed_dict={self.input: X})
                     if np.isnan(tloss) or np.isinf(tloss):
@@ -109,6 +110,7 @@ class BetaVAE:
                     if epoch == self.epochs-1:
                         lat = sess.run(self.z, feed_dict={self.input: X})
                         zs.append(lat)
+                        ys.append(y.reshape(-1,1))
                 if self.err:
                     break
                 print("\nLoss= {:>8.4f} Time: {:>8.4f}".format(tloss,
@@ -118,6 +120,7 @@ class BetaVAE:
             if viz:
                 self.plot_iteration(sess, X)
         self._lat_reps = np.vstack(zs)
+        self._labels   = np.vstack(ys)
         if viz:
             self.plot_interactions(sess, X)
             self.plot_independant(sess, X)
@@ -128,8 +131,10 @@ class BetaVAE:
     def create_iterator(self):
         # Create Tensorflow Iterator
         path_ds = tf.data.Dataset.from_tensor_slices(self.all_image_paths)
-        ds = path_ds.map(self.load_and_preprocess_image,
-                         num_parallel_calls=self.AUTOTUNE)
+        label_ds = tf.data.Dataset.from_tensor_slices(tf.cast(self.all_image_labels, tf.int64))
+        image_ds = path_ds.map(self.load_and_preprocess_image,
+                               num_parallel_calls=self.AUTOTUNE)
+        ds = tf.data.Dataset.zip((image_ds, label_ds))
         # ds = ds.shuffle(buffer_size=self.batch_size * 2)
         ds = ds.repeat(self.data_repeats)
         ds = ds.prefetch(buffer_size=self.AUTOTUNE)
@@ -138,7 +143,9 @@ class BetaVAE:
         return self.iterator.get_next()
 
     def get_next(self, sess):
-        return sess.run(tf.keras.layers.Flatten()(self.next_element))
+        X, y = sess.run(self.next_element)
+        X    = sess.run(tf.keras.layers.Flatten()(X))
+        return X, y
 
     def encode(self, x):
         with tf.variable_scope("Encoder", reuse=tf.AUTO_REUSE):
@@ -175,8 +182,7 @@ class BetaVAE:
     def load_data(self, path, extra_repeats=2):
         data_root = pathlib.Path(path)
         all_image_paths = list(data_root.glob("*." + self.format))
-        # all_image_labels = [label_to_index[pathlib.Path(path).parent.name]
-        #             for path in all_image_paths]
+        self.all_image_labels = [int(file.name[0]) for file in all_image_paths]
         self.all_image_paths = [str(path) for path in all_image_paths]
         self.image_count = len(self.all_image_paths)
         self.data_repeats = self.epochs * extra_repeats
