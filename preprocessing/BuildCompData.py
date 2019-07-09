@@ -43,8 +43,9 @@ def createPositiveSamples(filteredImages, fileList, numIterations=30):
 
         # single-single comparison
         imgFile = '1_'+str(imgID)+'_ii.jpg'
-        cv2.imwrite(os.path.join(outDir, 'A', imgFile), imgA)
-        cv2.imwrite(os.path.join(outDir, 'B', imgFile), imgB)
+        ab = ['A', 'B'] if np.random.randint(2) == 1 else ['B', 'A']
+        cv2.imwrite(os.path.join(outDir, ab[0], imgFile), imgA)
+        cv2.imwrite(os.path.join(outDir, ab[1], imgFile), imgB)
         fileList.append(imgFile)
         imgID += 1
 
@@ -52,8 +53,9 @@ def createPositiveSamples(filteredImages, fileList, numIterations=30):
         imgA = cv2.imread(os.path.join(srcDir, filteredImages[np.random.randint(len(filteredImages))]))[:,:,0]
         avrg = buildAvrgImg(filteredImages)
         imgFile = '1_'+str(imgID)+'_ia.jpg'
-        cv2.imwrite(os.path.join(outDir, 'A', imgFile), imgA)
-        cv2.imwrite(os.path.join(outDir, 'B', imgFile), avrg)
+        ab = ['A', 'B'] if np.random.randint(2) == 1 else ['B', 'A']
+        cv2.imwrite(os.path.join(outDir, ab[0], imgFile), imgA)
+        cv2.imwrite(os.path.join(outDir, ab[1], imgFile), avrg)
         fileList.append(imgFile)
         imgID += 1
 
@@ -61,8 +63,9 @@ def createPositiveSamples(filteredImages, fileList, numIterations=30):
         avrgA = buildAvrgImg(filteredImages, numImg=20)
         avrgB = buildAvrgImg(filteredImages, numImg=20)
         imgFile = '1_'+str(imgID)+'_aa.jpg'
-        cv2.imwrite(os.path.join(outDir, 'A', imgFile), avrgA)
-        cv2.imwrite(os.path.join(outDir, 'B', imgFile), avrgB)
+        ab = ['A', 'B'] if np.random.randint(2) == 1 else ['B', 'A']
+        cv2.imwrite(os.path.join(outDir, ab[0], imgFile), avrgA)
+        cv2.imwrite(os.path.join(outDir, ab[1], imgFile), avrgB)
         fileList.append(imgFile)
         imgID += 1
 
@@ -80,8 +83,9 @@ def createNegativeSamples(emotion, filesByEmotion, fileList, numIterations=30):
         imgA = cv2.imread(os.path.join(srcDir, targetFiles[np.random.randint(len(targetFiles))]))[:,:,0]
         imgB = cv2.imread(os.path.join(srcDir, otherFiles[np.random.randint(len(otherFiles))]))[:,:,0]
         imgFile = '0_'+str(imgID)+'_ii.jpg'
-        cv2.imwrite(os.path.join(outDir, 'A', imgFile), imgA)
-        cv2.imwrite(os.path.join(outDir, 'B', imgFile), imgB)
+        ab = ['A', 'B'] if np.random.randint(2) == 1 else ['B', 'A']
+        cv2.imwrite(os.path.join(outDir, ab[0], imgFile), imgA)
+        cv2.imwrite(os.path.join(outDir, ab[1], imgFile), imgB)
         fileList.append(imgFile)
         imgID += 1
 
@@ -92,8 +96,9 @@ def createNegativeSamples(emotion, filesByEmotion, fileList, numIterations=30):
             otherEmotion = np.random.randint(7)
         avrg = buildAvrgImg(filesByEmotion[otherEmotion])
         imgFile = '0_'+str(imgID)+'_ia.jpg'
-        cv2.imwrite(os.path.join(outDir, 'A', imgFile), imgA)
-        cv2.imwrite(os.path.join(outDir, 'B', imgFile), avrg)
+        ab = ['A', 'B'] if np.random.randint(2) == 1 else ['B', 'A']
+        cv2.imwrite(os.path.join(outDir, ab[0], imgFile), imgA)
+        cv2.imwrite(os.path.join(outDir, ab[1], imgFile), avrg)
         fileList.append(imgFile)
         imgID += 1
 
@@ -104,8 +109,9 @@ def createNegativeSamples(emotion, filesByEmotion, fileList, numIterations=30):
             otherEmotion = np.random.randint(7)
         avrgB = buildAvrgImg(filesByEmotion[otherEmotion], numImg=20)
         imgFile = '0_'+str(imgID)+'_aa.jpg'
-        cv2.imwrite(os.path.join(outDir, 'A', imgFile), avrgA)
-        cv2.imwrite(os.path.join(outDir, 'B', imgFile), avrgB)
+        ab = ['A', 'B'] if np.random.randint(2) == 1 else ['B', 'A']
+        cv2.imwrite(os.path.join(outDir, ab[0], imgFile), avrgA)
+        cv2.imwrite(os.path.join(outDir, ab[1], imgFile), avrgB)
         fileList.append(imgFile)
         imgID += 1
 

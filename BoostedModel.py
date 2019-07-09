@@ -204,9 +204,9 @@ class BoostedBetaVAE:
             model = tf.keras.layers.BatchNormalization()(model)
             #model = tf.keras.layers.MaxPool2D()(model)
             model = tf.keras.layers.Conv2D(48, kernel_size=3, activation=tf.nn.relu)(model)
-            model = tf.keras.layers.BatchNormalization()(model)
-            model = tf.keras.layers.Conv2D(96, kernel_size=3, activation=tf.nn.relu)(model)
-            model = tf.keras.layers.BatchNormalization()(model)
+            #model = tf.keras.layers.BatchNormalization()(model)
+            #model = tf.keras.layers.Conv2D(96, kernel_size=3, activation=tf.nn.relu)(model)
+            #model = tf.keras.layers.BatchNormalization()(model)
             #model = tf.keras.layers.MaxPool2D()(model)
             model = tf.keras.layers.Flatten()(model)
         return model
