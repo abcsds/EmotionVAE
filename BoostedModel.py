@@ -183,9 +183,9 @@ class BoostedBetaVAE:
         convB = self.featExtractorLayer(self.siameseInput, bScope)
 
         model = tf.concat([convA, convB], axis=1)
-        model = tf.keras.layers.Dense(20, activation=tf.nn.relu)(model)
+        model = tf.keras.layers.Dense(10, activation=tf.nn.relu)(model)
         model = tf.keras.layers.Dropout(rate=0.1)(model)
-        model = tf.keras.layers.Dense(20, activation=tf.nn.relu)(model)
+        model = tf.keras.layers.Dense(10, activation=tf.nn.relu)(model)
         model = tf.keras.layers.Dropout(rate=0.1)(model)
         return tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(model)
 
@@ -194,13 +194,13 @@ class BoostedBetaVAE:
         # 64 max pool 256 max pool flatten drop dense256 dense100 out
         with tf.variable_scope(scopeName, reuse=tf.AUTO_REUSE):
             model = tf.reshape(input, [-1, self.img_side, self.img_side, self.n_channels])
-            model = tf.keras.layers.Conv2D(12, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(6, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
             model = tf.keras.layers.BatchNormalization()(model)
             model = tf.keras.layers.MaxPool2D()(model)
-            model = tf.keras.layers.Conv2D(24, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(12, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
             model = tf.keras.layers.BatchNormalization()(model)
             #model = tf.keras.layers.MaxPool2D()(model)
-            model = tf.keras.layers.Conv2D(48, kernel_size=3, activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(24, kernel_size=3, activation=tf.nn.relu)(model)
             model = tf.keras.layers.Dropout(rate=0.2)(model)
             #model = tf.keras.layers.BatchNormalization()(model)
             #model = tf.keras.layers.Conv2D(96, kernel_size=3, activation=tf.nn.relu)(model)
