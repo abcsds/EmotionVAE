@@ -111,7 +111,7 @@ class BoostedBetaVAE:
         xTest, yTest = x[testIds], y[testIds]
 
         self.plottableLoss = []
-        self.plottableAcc = []
+        self.testLoss = []
 
         # train the siamese network
         for epoch in range(epochs):
@@ -129,15 +129,12 @@ class BoostedBetaVAE:
             # evaluate accuracy on test set
             yHat = sess.run(self.compScore, feed_dict={self.input:        xTest[:, 0, :, :].reshape(len(xTest), -1),
                                                        self.siameseInput: xTest[:, 1, :, :].reshape(len(xTest), -1)})
-            yHat = np.round(yHat[:,0], 0)
             # reporting values
-            acc = 1 - np.mean(np.abs(yTest - yHat))
+            testLoss = 1/2 * np.sum(np.square(yTest - yHat[:,0]))
             batchLoss /= len(trainBatches)
             self.plottableLoss.append(batchLoss)
-            self.plottableAcc.append(acc)
-            print("\nLoss= {:>8.4f} Test Acc= {:>1.4f}".format(batchLoss, acc))
-            if acc > accTol:
-                break
+            self.testLoss.append(testLoss)
+            print("\nLoss= {:>2.4f} Test Loss= {:>2.4f}".format(batchLoss, testLoss))
 
 
     def fit(self, sess):
