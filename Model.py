@@ -4,6 +4,7 @@ import pathlib
 import numpy as np
 from time import time
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import OneHotEncoder
 
 
 # think about
@@ -17,7 +18,7 @@ class BetaVAE:
                  img_side=128,
                  batch_size=16,
                  epochs=10,
-                 n_z=10,
+                 n_z=6,
                  beta=4,
                  lr=1e-3,
                  format="jpg",
@@ -34,6 +35,7 @@ class BetaVAE:
         self.epsilon    = epsilon
         self.n_channels = n_channels
         self.format     = format
+        self.n_classes  = self.n_z
 
         # Build Model Architecture
         tf.reset_default_graph()
@@ -42,13 +44,20 @@ class BetaVAE:
         self.load_data(path, extra_repeats=extra_repeats)
         self.next_element = self.create_iterator()
 
+        # OneHotEncoder
+        self.enc = OneHotEncoder(handle_unknown="ignore", n_values=self.n_classes)
+        self.enc.fit(np.arange(self.n_classes).reshape(-1, 1))
+
         # Placeholders
-        self.input = tf.placeholder(tf.float32,
-                                    [None, self.img_size],
-                                    name="Inputs")
+        self.input  = tf.placeholder(tf.float32,
+                                     [None, self.img_size],
+                                     name="Inputs")
         self.latent = tf.placeholder(tf.float32,
                                      [None, self.n_z],
                                      name="Latents")
+        self.label  = tf.placeholder(tf.float32,
+                                     [None, self.n_classes],
+                                     name="Labels")
 
         # Encoder, decoder and sampling
         self.encode(self.input) # z, mu, and lss are saved in the object.
@@ -65,7 +74,8 @@ class BetaVAE:
                                          + (1 - self.input)
                                          * tf.log(self.epsilon + 1-self.model),
                                          axis=1)
-        self.recon_loss = tf.reduce_mean(self.recon_loss)
+        self.recon_loss = tf.reduce_mean(self.recon_loss,
+                                         name="Reconstruction_Loss")
 
         # Latent loss
         # KL divergence: measure the difference between two distributions
@@ -74,10 +84,15 @@ class BetaVAE:
         self.latent_loss = -0.5 * tf.reduce_sum(
                             1 + self.log_sigma_sq - tf.square(self.mu) -
                             tf.exp(self.log_sigma_sq), axis=1)
-        self.latent_loss = tf.reduce_mean(self.latent_loss)
+        self.latent_loss = tf.reduce_mean(self.latent_loss, name="Latent_Loss")
+
+        # Classification Loss
+        loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.label,
+                                                          logits=self.z)
+        self.class_loss = tf.reduce_mean(loss, name="Classification_Loss")
 
         # Total loss
-        self.loss = self.recon_loss + self.beta * self.latent_loss
+        self.loss = self.recon_loss + self.beta * self.latent_loss + self.class_loss
         self.plottableLoss = []
 
         # Optimizer
@@ -100,17 +115,22 @@ class BetaVAE:
                 for i in range(self.n_batches):
                     print(".", end="")
                     X, y = self.get_next(sess)
-                    tloss, _ = sess.run([self.loss, self.opt],
-                                        feed_dict={self.input: X})
+                    # One hot encode y
+                    feed_dict = {self.input: X,
+                                 self.label: self.enc.transform(y).toarray()}
+                    tloss, _  = sess.run([self.loss, self.opt],
+                                         feed_dict=feed_dict)
                     if np.isnan(tloss) or np.isinf(tloss):
                         print("Error: loss went cray cray")
                         self.err = True
                         break
                     self.plottableLoss.append(tloss)
                     if epoch == self.epochs-1:
-                        lat = sess.run(self.z, feed_dict={self.input: X})
+                        feed_dict = {self.input: X,
+                                     self.label: self.enc.transform(y).toarray()}
+                        lat = sess.run(self.z, feed_dict=feed_dict)
                         zs.append(lat)
-                        ys.append(y.reshape(-1,1))
+                        ys.append(y)
                 if self.err:
                     break
                 print("\nLoss= {:>8.4f} Time: {:>8.4f}".format(tloss,
@@ -118,15 +138,17 @@ class BetaVAE:
             except tf.errors.OutOfRangeError:
                 pass
             if viz:
-                self.plot_iteration(sess, X)
+                self.plot_iteration(sess, X, y)
         self._lat_reps = np.vstack(zs)
         self._labels   = np.vstack(ys)
         if viz:
             self.plot_interactions(sess, X)
-            self.plot_independant(sess, X)
+            self.plot_independant(sess, X, y)
 
-    def predict(self, sess, x):
-        return sess.run(self.model, feed_dict={self.input: x})
+    def predict(self, sess, X, y):
+        feed_dict = {self.input: X,
+                     self.label: self.enc.transform(y).toarray()}
+        return sess.run(self.model, feed_dict=feed_dict)
 
     def create_iterator(self):
         # Create Tensorflow Iterator
@@ -135,7 +157,7 @@ class BetaVAE:
         image_ds = path_ds.map(self.load_and_preprocess_image,
                                num_parallel_calls=self.AUTOTUNE)
         ds = tf.data.Dataset.zip((image_ds, label_ds))
-        # ds = ds.shuffle(buffer_size=self.batch_size * 2)
+        ds = ds.shuffle(buffer_size=self.batch_size * 2)
         ds = ds.repeat(self.data_repeats)
         ds = ds.prefetch(buffer_size=self.AUTOTUNE)
         ds = ds.batch(self.batch_size)
@@ -145,16 +167,17 @@ class BetaVAE:
     def get_next(self, sess):
         X, y = sess.run(self.next_element)
         X    = sess.run(tf.keras.layers.Flatten()(X))
+        y = y.reshape(-1, 1)
         return X, y
 
     def encode(self, x):
         with tf.variable_scope("Encoder", reuse=tf.AUTO_REUSE):
             model = tf.reshape(x, [-1, self.img_side, self.img_side, self.n_channels])
-            model = tf.keras.layers.Conv2D(filters=64, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(filters=64,  kernel_size=5, padding="same", activation="relu")(model)
             model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
-            model = tf.keras.layers.Conv2D(filters=128, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(filters=128, kernel_size=5, padding="same", activation="relu")(model)
             model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
-            model = tf.keras.layers.Conv2D(filters=256, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(filters=256, kernel_size=5, padding="same", activation="relu")(model)
             model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
             self._int_shape = tf.keras.backend.int_shape(model)
             model = tf.keras.layers.Flatten()(model)
@@ -169,13 +192,13 @@ class BetaVAE:
         with tf.variable_scope("decoder", reuse=tf.AUTO_REUSE):
             model = tf.keras.layers.Dense(self._int_shape[1] * self._int_shape[2] * self._int_shape[3])(x)
             model = tf.reshape(model, [-1, self._int_shape[1], self._int_shape[2], self._int_shape[3]])
-            model = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=5, padding="same", activation="relu")(model)
             model = tf.keras.layers.UpSampling2D((2, 2))(model)
-            model = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=5, padding="same", activation="relu")(model)
             model = tf.keras.layers.UpSampling2D((2, 2))(model)
-            model = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=64,  kernel_size=5, padding="same", activation="relu")(model)
             model = tf.keras.layers.UpSampling2D((2, 2))(model)
-            model = tf.keras.layers.Conv2DTranspose(filters=1, kernel_size=1, padding="same", activation="sigmoid")(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=1,   kernel_size=1, padding="same", activation="sigmoid")(model)
             model = tf.keras.layers.Flatten()(model)
         return model
 
@@ -205,7 +228,7 @@ class BetaVAE:
         image = tf.read_file(path)
         return self.preprocess_image(image)
 
-    def plot_iteration(self, sess, X, n_subplots=5, figsize=(10, 4)):
+    def plot_iteration(self, sess, X, y, n_subplots=5, figsize=(10, 4)):
         # Generate images from noise
         f, a = plt.subplots(2, n_subplots, figsize=figsize)
         for i in range(n_subplots):
@@ -215,7 +238,9 @@ class BetaVAE:
                              newshape=(self.img_side, self.img_side, 3))
             a[0][i].imshow(inn)
             a[0][i].axis("off")
-            out = sess.run(self.model, feed_dict={self.input:X})
+            feed_dict = {self.input: X,
+                         self.label: self.enc.transform(y).toarray()}
+            out = sess.run(self.model, feed_dict=feed_dict)
             out = np.reshape(out, newshape=(-1, self.img_side, self.img_side, 1))
             out = np.reshape(np.repeat(out[i][:, :, np.newaxis], 3, axis=2),
                              newshape=(self.img_side, self.img_side, 3))
@@ -225,7 +250,7 @@ class BetaVAE:
         f.show()
         plt.show()
 
-    def plot_independant(self, sess, X, n_subplots=5, figsize=(16, 16), scale=5):
+    def plot_independant(self, sess, X, y, n_subplots=5, figsize=(16, 16), scale=5):
         f, a = plt.subplots(self.n_z, n_subplots, figsize=figsize)
         samples = np.linspace(-scale, scale, n_subplots)
         for i in range(self.n_z):
@@ -246,9 +271,10 @@ class BetaVAE:
         samples = np.linspace(-scale, scale, n_subplots)
         for i in range(n_subplots):
             for j in range(n_subplots):
-                r = np.array([[0] * n_subplots])
+                r = np.array([[0] * self.n_classes])
                 r[0][vars[0]] = samples[i]
                 r[0][vars[1]] = samples[j]
+                # Doesn't need a label, because there is no classification
                 out = sess.run(self.sample, feed_dict={self.latent: r})
                 out = np.reshape(out, newshape=(self.img_side, self.img_side, 1))
                 out = np.reshape(np.repeat(out[:, :, np.newaxis], 3, axis=2),
