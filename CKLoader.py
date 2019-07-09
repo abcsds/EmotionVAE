@@ -2,12 +2,16 @@ import os
 import cv2
 import numpy as np
 
-def load(dir='dataset', labelFormat="oneHot"):
+outDir = "ck"
+
+def load(labelFormat="oneHot"):
     '''
     :param dir: dataset directory
     :param labelFormat: oneHot or sparse
     :return: x, y as numpy arrays
     '''
+    global outDir
+
     unzip()
 
     x = list()
@@ -27,8 +31,8 @@ def load(dir='dataset', labelFormat="oneHot"):
 
 
 def unzip():
+    global outDir
     zipFile = "preprocessing/augmented.zip"
-    outDir = "dataset"
 
     assert os.path.exists(zipFile)
 
@@ -43,6 +47,3 @@ def unzip():
     zip_ref = zipfile.ZipFile(zipFile, 'r')
     zip_ref.extractall(outDir)
     zip_ref.close()
-
-#x,y = load()
-#print(x.shape, y.shape)
