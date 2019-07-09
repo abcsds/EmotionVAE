@@ -25,7 +25,7 @@ class BoostedBetaVAE:
                  extra_repeats=2,
                  n_channels=1,
                  epsilon=1e-10,
-                 share_weights=True):
+                 share_weights=False):
         self.img_side   = img_side
         self.img_size   = self.img_side**2
         self.batch_size = batch_size
@@ -92,7 +92,8 @@ class BoostedBetaVAE:
 
         # Optimizer Siamese
         siaVarList = [x for x in tf.global_variables() if x.name.startswith('siamese_')]
-        opt = tf.train.AdamOptimizer(learning_rate=5e-5)
+        opt = tf.train.AdamOptimizer(learning_rate=1e-4)
+        #opt = tf.train.GradientDescentOptimizer(learning_rate=1e-5)
         self.siaOpt = opt.minimize(self.siameseLoss, var_list=siaVarList)
 
         # Optimizer VAE
@@ -101,19 +102,42 @@ class BoostedBetaVAE:
         self.vaeOpt = opt.minimize(self.loss, var_list=vaeVarList)
 
 
-    def prefit(self, sess, x, y, batchSize=16):
-        batches = BatchIterator(x, y, batchSize)
+    def prefit(self, sess, x, y, epochs, batchSize=16, testSplit=0.2):
+
+        ids = list(range(len(x)))
+        np.random.shuffle(ids)
+        splitPoint = int(len(ids) * testSplit)
+        trainIds, testIds = ids[splitPoint:], ids[:splitPoint]
+
+        trainBatches = BatchIterator(x[trainIds], y[trainIds], batchSize)
+        xTest, yTest = x[testIds], y[testIds]
+
+        self.plottableLoss = []
+        self.plottableAcc = []
+
         # train the siamese network
-        for epoch in range(30):
+        for epoch in range(epochs):
             print("Epoch {:>2}:  ".format(epoch), end="")
-            for mbX, mbY in batches:
+            batchLoss = 0
+            for mbX, mbY in trainBatches:
                 print(".", end="")
                 tloss, _ = sess.run([self.siameseLoss, self.siaOpt],
                                     feed_dict={
                                         self.input: mbX[:, 0, :, :].reshape(batchSize, -1),
                                         self.siameseInput: mbX[:, 1, :, :].reshape(batchSize, -1),
                                         self.siameseLabel: mbY.reshape(batchSize, -1)})
-            print("\nLoss= {:>8.4f}".format(tloss))
+                batchLoss += tloss
+
+            # evaluate accuracy on test set
+            yHat = sess.run(self.compScore, feed_dict={self.input:        xTest[:, 0, :, :].reshape(len(xTest), -1),
+                                                       self.siameseInput: xTest[:, 1, :, :].reshape(len(xTest), -1)})
+            yHat = np.round(yHat, 0)
+            # reporting values
+            acc = 1 - np.mean(np.abs(yTest - yHat))
+            batchLoss /= len(trainBatches)
+            self.plottableLoss.append(batchLoss)
+            self.plottableAcc.append(acc)
+            print("\nLoss= {:>8.4f} Test Acc= {:>1.4f}".format(batchLoss, acc))
 
 
     def fit(self, sess):
@@ -150,7 +174,7 @@ class BoostedBetaVAE:
         return sess.run(self.model, feed_dict={self.input: x})
 
 
-    def siamese(self, input, share_weights=False):
+    def siamese(self, input, share_weights):
         self.siameseInput = tf.placeholder_with_default(input, input.shape, name='siameseInput')
 
         convA = self.featExtractorLayer(input, "siamese_A")
@@ -160,18 +184,28 @@ class BoostedBetaVAE:
             bScope = "siamese_B"
         convB = self.featExtractorLayer(self.siameseInput, bScope)
 
-        latentRepr = tf.concat([convA, convB], axis=1)
-        return tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(latentRepr)
+        model = tf.concat([convA, convB], axis=1)
+        model = tf.keras.layers.Dense(20, activation=tf.nn.relu)(model)
+        model = tf.keras.layers.Dense(20, activation=tf.nn.relu)(model)
+        #model = tf.keras.layers.Dropout(rate=0.1)(model)
+        return tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(model)
 
 
     def featExtractorLayer(self, input, scopeName):
         # 64 max pool 256 max pool flatten drop dense256 dense100 out
         with tf.variable_scope(scopeName, reuse=tf.AUTO_REUSE):
             model = tf.reshape(input, [-1, self.img_side, self.img_side, self.n_channels])
-            model = tf.keras.layers.Conv2D(8, kernel_size=3, activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(12, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
+            model = tf.keras.layers.BatchNormalization()(model)
             model = tf.keras.layers.MaxPool2D()(model)
-            model = tf.keras.layers.Conv2D(32, kernel_size=3, activation=tf.nn.relu)(model)
-            model = tf.keras.layers.MaxPool2D()(model)
+            model = tf.keras.layers.Conv2D(24, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
+            model = tf.keras.layers.BatchNormalization()(model)
+            #model = tf.keras.layers.MaxPool2D()(model)
+            model = tf.keras.layers.Conv2D(48, kernel_size=3, activation=tf.nn.relu)(model)
+            model = tf.keras.layers.BatchNormalization()(model)
+            model = tf.keras.layers.Conv2D(96, kernel_size=3, activation=tf.nn.relu)(model)
+            model = tf.keras.layers.BatchNormalization()(model)
+            #model = tf.keras.layers.MaxPool2D()(model)
             model = tf.keras.layers.Flatten()(model)
         return model
 

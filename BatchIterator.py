@@ -16,6 +16,7 @@ class BatchIterator:
         self.y = y
         self.reset()
 
+
     def reset(self):
         r = np.arange(len(self.x))
         np.random.shuffle(r)
