@@ -34,7 +34,7 @@ def buildAvrgImg(filteredImages, numImg=70):
 
 imgID = 1
 
-def createPositiveSamples(filteredImages, fileList, numIterations=10):
+def createPositiveSamples(filteredImages, fileList, numIterations=30):
     global imgID
 
     for i in range(numIterations):
@@ -67,7 +67,7 @@ def createPositiveSamples(filteredImages, fileList, numIterations=10):
         imgID += 1
 
 
-def createNegativeSamples(emotion, filesByEmotion, fileList, numIterations=10):
+def createNegativeSamples(emotion, filesByEmotion, fileList, numIterations=30):
     global imgID
 
     targetFiles = filesByEmotion[emotion]

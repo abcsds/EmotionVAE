@@ -50,8 +50,8 @@ class BoostedBetaVAE:
         self.latent = tf.placeholder(tf.float32,
                                      [None, self.n_z],
                                      name="Latents")
-
         self.siameseLabel = tf.placeholder(tf.float32, [None, 1])
+        self.sample = self.decode(self.latent)
 
         # Encoder, decoder and sampling
         self.encode(self.input) # z, mu, and lss are saved in the object.
@@ -59,8 +59,6 @@ class BoostedBetaVAE:
 
         # siamese network
         self.compScore = self.siamese(self.input, share_weights)
-
-        self.sample = self.decode(self.latent)
 
         # LOSSES
         # Reconstruction loss
@@ -172,6 +170,7 @@ class BoostedBetaVAE:
             except tf.errors.OutOfRangeError:
                 pass
 
+
     def predict(self, sess, x):
         return sess.run(self.model, feed_dict={self.input: x})
 
@@ -188,8 +187,9 @@ class BoostedBetaVAE:
 
         model = tf.concat([convA, convB], axis=1)
         model = tf.keras.layers.Dense(20, activation=tf.nn.relu)(model)
+        model = tf.keras.layers.Dropout(rate=0.1)(model)
         model = tf.keras.layers.Dense(20, activation=tf.nn.relu)(model)
-        #model = tf.keras.layers.Dropout(rate=0.1)(model)
+        model = tf.keras.layers.Dropout(rate=0.1)(model)
         return tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(model)
 
 
