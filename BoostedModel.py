@@ -102,7 +102,7 @@ class BoostedBetaVAE:
         self.vaeOpt = opt.minimize(self.loss, var_list=vaeVarList)
 
 
-    def prefit(self, sess, x, y, epochs, batchSize=16, testSplit=0.2):
+    def prefit(self, sess, x, y, epochs, batchSize=16, testSplit=0.2, accTol=0.95):
 
         ids = list(range(len(x)))
         np.random.shuffle(ids)
@@ -131,13 +131,15 @@ class BoostedBetaVAE:
             # evaluate accuracy on test set
             yHat = sess.run(self.compScore, feed_dict={self.input:        xTest[:, 0, :, :].reshape(len(xTest), -1),
                                                        self.siameseInput: xTest[:, 1, :, :].reshape(len(xTest), -1)})
-            yHat = np.round(yHat, 0)
+            yHat = np.round(yHat[:,0], 0)
             # reporting values
             acc = 1 - np.mean(np.abs(yTest - yHat))
             batchLoss /= len(trainBatches)
             self.plottableLoss.append(batchLoss)
             self.plottableAcc.append(acc)
             print("\nLoss= {:>8.4f} Test Acc= {:>1.4f}".format(batchLoss, acc))
+            if acc > accTol:
+                break
 
 
     def fit(self, sess):

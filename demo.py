@@ -13,7 +13,7 @@ CK.unzip()
 model = BoostedBetaVAE(share_weights=True)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    model.prefit(sess, x, y, epochs=20)
+    model.prefit(sess, x, y, epochs=50)
     for _ in range(5):
         idx = np.random.randint(len(x))
         x1, x2, y1 = x[idx, 0, :, :].reshape(1, -1), \
