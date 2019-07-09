@@ -33,12 +33,13 @@ class BetaVAE:
         self.lr         = lr
         self.epsilon    = epsilon
         self.n_channels = n_channels
+        self.format     = format
 
         # Build Model Architecture
         tf.reset_default_graph()
 
         # Data loading
-        self.load_data(path, format=format, extra_repeats=extra_repeats)
+        self.load_data(path, extra_repeats=extra_repeats)
         self.next_element = self.create_iterator()
 
         # Placeholders
@@ -117,6 +118,9 @@ class BetaVAE:
             if viz:
                 self.plot_iteration(sess, X)
         self._lat_reps = np.vstack(zs)
+        if viz:
+            self.plot_interactions(sess, X)
+            self.plot_independant(sess, X)
 
     def predict(self, sess, x):
         return sess.run(self.model, feed_dict={self.input: x})
@@ -156,7 +160,7 @@ class BetaVAE:
 
     def decode(self, x):
         with tf.variable_scope("decoder", reuse=tf.AUTO_REUSE):
-            model = tf.keras.layers.Dense(self._int_shape[1] * self._int_shape[2] * self._int_shape[3], activation="relu")(x)
+            model = tf.keras.layers.Dense(self._int_shape[1] * self._int_shape[2] * self._int_shape[3])(x)
             model = tf.reshape(model, [-1, self._int_shape[1], self._int_shape[2], self._int_shape[3]])
             model = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
             model = tf.keras.layers.UpSampling2D((2, 2))(model)
@@ -164,13 +168,13 @@ class BetaVAE:
             model = tf.keras.layers.UpSampling2D((2, 2))(model)
             model = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=5, padding="same", activation=tf.nn.relu)(model)
             model = tf.keras.layers.UpSampling2D((2, 2))(model)
-            model = tf.keras.layers.Conv2DTranspose(filters=1, kernel_size=1, activation="sigmoid", padding="same")(model)
+            model = tf.keras.layers.Conv2DTranspose(filters=1, kernel_size=1, padding="same", activation="sigmoid")(model)
             model = tf.keras.layers.Flatten()(model)
         return model
 
-    def load_data(self, path, format="jpg", extra_repeats=2):
+    def load_data(self, path, extra_repeats=2):
         data_root = pathlib.Path(path)
-        all_image_paths = list(data_root.glob("*." + format))
+        all_image_paths = list(data_root.glob("*." + self.format))
         # all_image_labels = [label_to_index[pathlib.Path(path).parent.name]
         #             for path in all_image_paths]
         self.all_image_paths = [str(path) for path in all_image_paths]
@@ -179,7 +183,12 @@ class BetaVAE:
         self.n_batches = self.image_count // self.batch_size
 
     def preprocess_image(self, image):
-        image = tf.image.decode_jpeg(image, channels=self.n_channels)
+        if self.format in ["jpeg", "jpg"]:
+            image = tf.image.decode_jpeg(image, channels=self.n_channels)
+        elif self.format == "png":
+            image = tf.image.decode_png(image, channels=self.n_channels)
+        else:
+            raise FileNotFoundError("Image format not accepted.")
         # image = tf.image.resize_images(image, [self.img_side, self.img_side])
         # image = tf.image.per_image_standardization(image)
         # image = image + tf.reduce_min(image)
@@ -207,6 +216,39 @@ class BetaVAE:
             a[1][i].imshow(out)
             a[1][i].axis("off")
 
+        f.show()
+        plt.show()
+
+    def plot_independant(self, sess, X, n_subplots=5, figsize=(16, 16), scale=5):
+        f, a = plt.subplots(self.n_z, n_subplots, figsize=figsize)
+        samples = np.linspace(-scale, scale, n_subplots)
+        for i in range(self.n_z):
+            for j in range(n_subplots):
+                r = np.array([[0] * self.n_z])
+                r[0][i] = samples[j]
+                out = sess.run(self.sample, feed_dict={self.latent: r})
+                out = np.reshape(out, newshape=(self.img_side, self.img_side, 1))
+                out = np.reshape(np.repeat(out[:, :, np.newaxis], 3, axis=2),
+                                 newshape=(self.img_side, self.img_side, 3))
+                a[i][j].imshow(out)
+                a[i][j].axis("off")
+        f.show()
+        plt.show()
+
+    def plot_interactions(self, sess, X, vars=(0, 1), n_subplots=10, figsize=(16, 16), scale=5):
+        f, a = plt.subplots(n_subplots, n_subplots, figsize=figsize)
+        samples = np.linspace(-scale, scale, n_subplots)
+        for i in range(n_subplots):
+            for j in range(n_subplots):
+                r = np.array([[0] * n_subplots])
+                r[0][vars[0]] = samples[i]
+                r[0][vars[1]] = samples[j]
+                out = sess.run(self.sample, feed_dict={self.latent: r})
+                out = np.reshape(out, newshape=(self.img_side, self.img_side, 1))
+                out = np.reshape(np.repeat(out[:, :, np.newaxis], 3, axis=2),
+                                 newshape=(self.img_side, self.img_side, 3))
+                a[i][j].imshow(out)
+                a[i][j].axis("off")
         f.show()
         plt.show()
 
