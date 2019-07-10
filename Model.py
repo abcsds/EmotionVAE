@@ -4,8 +4,6 @@ import pathlib
 import numpy as np
 from time import time
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import OneHotEncoder
-
 
 # think about
 # session management (session should come from colab)
@@ -46,10 +44,6 @@ class BetaVAE:
         # Data loading
         self.load_data(path, extra_repeats=extra_repeats)
         self.next_element = self.create_iterator()
-
-        # OneHotEncoder
-        self.enc = OneHotEncoder(handle_unknown="ignore", n_values=self.n_classes)
-        self.enc.fit(np.arange(self.n_classes).reshape(-1, 1))
 
         # Placeholders
         self.input  = tf.placeholder(tf.float32,
@@ -116,7 +110,7 @@ class BetaVAE:
                     X, y = self.get_next(sess)
                     # One hot encode y
                     feed_dict = {self.input: X,
-                                 self.label: self.enc.transform(y).toarray()}
+                                 self.label: self.oneHotEncode(y)}
                     tloss, _  = sess.run([self.loss, self.opt],
                                          feed_dict=feed_dict)
                     if np.isnan(tloss) or np.isinf(tloss):
@@ -124,7 +118,7 @@ class BetaVAE:
                     self.plottableLoss.append(tloss)
                     if epoch == self.epochs-1:
                         feed_dict = {self.input: X,
-                                     self.label: self.enc.transform(y).toarray()}
+                                     self.label: self.oneHotEncode(y)}
                         lat = sess.run(self.z, feed_dict=feed_dict)
                         zs.append(lat)
                         ys.append(y)
@@ -143,7 +137,7 @@ class BetaVAE:
 
     def predict(self, sess, X, y):
         feed_dict = {self.input: X,
-                     self.label: self.enc.transform(y).toarray()}
+                     self.label: self.oneHotEncode(y)}
         return sess.run(self.model, feed_dict=feed_dict)
 
     def create_iterator(self):
@@ -172,11 +166,6 @@ class BetaVAE:
             model = tf.reshape(x, [-1, self.img_side, self.img_side, self.n_channels])
             model = tf.keras.layers.Conv2D(filters=32,  kernel_size=3, strides=(2,2), padding="same", activation="relu")(model)
             model = tf.keras.layers.Conv2D(filters=64,  kernel_size=3, strides=(2,2), padding="same", activation="relu")(model)
-            # model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
-            # model = tf.keras.layers.Conv2D(filters=128, kernel_size=5, padding="same", activation="relu")(model)
-            # model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
-            # model = tf.keras.layers.Conv2D(filters=256, kernel_size=5, padding="same", activation="relu")(model)
-            # model = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(model)
             self._int_shape = tf.keras.backend.int_shape(model)
             model = tf.keras.layers.Flatten()(model)
             mu = tf.keras.layers.Dense(self.n_z)(model)
@@ -190,18 +179,12 @@ class BetaVAE:
         with tf.variable_scope("Decoder", reuse=tf.AUTO_REUSE):
             model = tf.keras.layers.Dense(self._int_shape[1] * self._int_shape[2] * self._int_shape[3])(x)
             model = tf.reshape(model, [-1, self._int_shape[1], self._int_shape[2], self._int_shape[3]])
-            # model = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=5, padding="same", activation="relu")(model)
-            # model = tf.keras.layers.UpSampling2D((2, 2))(model)
-            # model = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=5, padding="same", activation="relu")(model)
-            # model = tf.keras.layers.UpSampling2D((2, 2))(model)
             model = tf.keras.layers.Conv2DTranspose(filters=64,  kernel_size=3, strides=(2,2), padding="same", activation="relu")(model)
-            # model = tf.keras.layers.UpSampling2D((2, 2))(model)
             model = tf.keras.layers.Conv2DTranspose(filters=32,  kernel_size=3, strides=(2,2), padding="same", activation="relu")(model)
             model = tf.keras.layers.Conv2DTranspose(filters=1,   kernel_size=1, padding="same", activation="relu")(model)
             model = tf.keras.layers.Flatten()(model)
             model = tf.keras.layers.Dense(self.img_size, activation="sigmoid")(model)
             return model
-
 
     def load_data(self, path, extra_repeats=2):
         data_root = pathlib.Path(path)
@@ -240,7 +223,7 @@ class BetaVAE:
             a[0][i].imshow(inn)
             a[0][i].axis("off")
             feed_dict = {self.input: X,
-                         self.label: self.enc.transform(y).toarray()}
+                         self.label: self.oneHotEncode(y)}
             out = sess.run(self.model, feed_dict=feed_dict)
             out = np.reshape(out, newshape=(-1, self.img_side, self.img_side, 1))
             out = np.reshape(np.repeat(out[i][:, :, np.newaxis], 3, axis=2),
@@ -259,7 +242,7 @@ class BetaVAE:
                 r = np.array([[0] * self.n_z])
                 r[0][i] = samples[j]
                 feed_dict={self.input: X,
-                           self.label: self.enc.transform(y).toarray(),
+                           self.label: self.oneHotEncode(y),
                            self.latent: r}
                 out = sess.run(self.sample, feed_dict=feed_dict)
                 out = np.reshape(out, newshape=(self.img_side, self.img_side, 1))
@@ -291,3 +274,13 @@ class BetaVAE:
 
     def latent_std(self):
         return np.std(self._lat_reps, axis=0)
+
+    def oneHotEncodeInt(self, x):
+        x = x[0]
+        vec = [0] * self.n_classes
+        if x != 0:
+            vec[x - 1]  = 1
+        return vec
+
+    def oneHotEncode(self, x):
+        return np.apply_along_axis(self.oneHotEncodeInt, 1, x)
