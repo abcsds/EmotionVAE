@@ -182,7 +182,16 @@ class BoostedBetaVAE:
             bScope = "siamese_B"
         convB = self.featExtractorLayer(self.siameseInput, bScope)
 
-        model = tf.concat([convA, convB], axis=1)
+        # convert to convolutional problem
+        # add additional dimension for the stack
+        convA = tf.expand_dims(convA, axis=-1)
+        convB = tf.expand_dims(convB, axis=-1)
+        model = tf.expand_dims(tf.concat([convA, convB], axis=2), axis=-1)
+
+        # final comparison layer
+        model = tf.keras.layers.Conv2D(10, kernel_size=(5, 2), activation=tf.nn.relu)(model)
+        model = tf.keras.layers.MaxPool2D(pool_size=(2,1))(model)
+        model = tf.keras.layers.Flatten()(model)
         model = tf.keras.layers.Dense(10, activation=tf.nn.relu)(model)
         model = tf.keras.layers.Dropout(rate=0.1)(model)
         model = tf.keras.layers.Dense(10, activation=tf.nn.relu)(model)
@@ -197,15 +206,14 @@ class BoostedBetaVAE:
             model = tf.keras.layers.Conv2D(6, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
             model = tf.keras.layers.BatchNormalization()(model)
             model = tf.keras.layers.MaxPool2D()(model)
-            model = tf.keras.layers.Conv2D(12, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
+            model = tf.keras.layers.Conv2D(10, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
             model = tf.keras.layers.BatchNormalization()(model)
-            #model = tf.keras.layers.MaxPool2D()(model)
-            model = tf.keras.layers.Conv2D(24, kernel_size=3, activation=tf.nn.relu)(model)
+            model = tf.keras.layers.MaxPool2D()(model)
+            model = tf.keras.layers.Conv2D(14, kernel_size=5, padding='same', activation=tf.nn.relu)(model)
+            model = tf.keras.layers.BatchNormalization()(model)
+            model = tf.keras.layers.MaxPool2D()(model)
+            model = tf.keras.layers.Conv2D(18, kernel_size=3, activation=tf.nn.relu)(model)
             model = tf.keras.layers.Dropout(rate=0.2)(model)
-            #model = tf.keras.layers.BatchNormalization()(model)
-            #model = tf.keras.layers.Conv2D(96, kernel_size=3, activation=tf.nn.relu)(model)
-            #model = tf.keras.layers.BatchNormalization()(model)
-            #model = tf.keras.layers.MaxPool2D()(model)
             model = tf.keras.layers.Flatten()(model)
         return model
 
