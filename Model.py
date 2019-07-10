@@ -163,13 +163,9 @@ class BetaVAE:
     def get_next(self, sess):
         X, y = sess.run(self.next_element)
         # Don't create graph on the run
-        X    = sess.run(self.flatten(X))
+        X    = X.reshape(-1, self.img_size)
         y = y.reshape(-1, 1)
         return X, y
-
-    def flatten(self, x):
-        with tf.variable_scope("Flatten", reuse=tf.AUTO_REUSE):
-            return tf.keras.layers.Flatten()(x)
 
     def encode(self, x):
         with tf.variable_scope("Encoder", reuse=tf.AUTO_REUSE):
