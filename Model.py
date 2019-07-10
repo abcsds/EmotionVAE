@@ -5,6 +5,10 @@ import numpy as np
 from time import time
 import matplotlib.pyplot as plt
 
+import tensorflow_probability as tfp
+tfd = tfp.distributions
+
+
 # think about
 # session management (session should come from colab)
 # is the optimizer included in the model class? (sklearn style)
@@ -57,7 +61,7 @@ class BetaVAE:
                                      name="Labels")
 
         # Encoder, decoder and sampling
-        self.z, self.log_sigma_sq, self.mu = self.encode(self.input)
+        self.z, self.theta, self.k = self.encode(self.input)
         self.model  = self.decode(self.z)
         self.sample = self.decode(self.latent)
 
@@ -71,10 +75,10 @@ class BetaVAE:
         # Latent loss
         # KL divergence: measure the difference between two distributions
         # Here we measure the divergence between
-        # the latent distribution and N(0, 1)
-        self.latent_loss = -0.5 * tf.reduce_sum(
-                            1 + self.log_sigma_sq - tf.square(self.mu) -
-                            tf.exp(self.log_sigma_sq), axis=1)
+        # the latent distribution and Gamma(0, 1)
+        dist1 = tfd.Gamma(self.k, self.theta)
+        dist2 = tfd.Gamma(1, 1)
+        self.latent_loss = tfd.kl_divergence(dist1, dist2)
         self.latent_loss = tf.reduce_mean(self.latent_loss, name="Latent_Loss")
 
         # Classification Loss
@@ -168,12 +172,15 @@ class BetaVAE:
             model = tf.keras.layers.Conv2D(filters=64,  kernel_size=3, strides=(2,2), padding="same", activation="relu")(model)
             self._int_shape = tf.keras.backend.int_shape(model)
             model = tf.keras.layers.Flatten()(model)
-            mu = tf.keras.layers.Dense(self.n_z)(model)
-            log_sigma_sq = tf.keras.layers.Dense(self.n_z)(model)
-            eps = tf.random_normal(shape=tf.shape(log_sigma_sq),
-                                        mean=0, stddev=1, dtype=tf.float32)
-            z = mu + tf.sqrt(tf.exp(log_sigma_sq)) * eps
-            return z, log_sigma_sq, mu
+            k     = tf.keras.layers.Dense(self.n_z)(model)
+            theta = tf.keras.layers.Dense(self.n_z)(model)
+            eps   = tf.random.gamma(shape=tf.shape(theta),
+                                    alpha=1,
+                                    beta=1,
+                                    name="GammaSample",
+                                    dtype=tf.float32)
+            z = k + theta * eps
+            return z, theta, k
 
     def decode(self, x):
         with tf.variable_scope("Decoder", reuse=tf.AUTO_REUSE):
